@@ -1,0 +1,501 @@
+﻿
+    @model List<TaskModel>
+
+<style>
+    .card {
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+
+        .card:hover {
+            transform: translateY(-10px); /* Di chuyển lên trên khi hover */
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1); /* Thêm bóng mờ */
+        }
+
+    .no-results-message {
+        padding: 10px;
+        background-color: #f8d7da;
+        color: #721c24;
+        border: 1px solid #f5c6cb;
+        border-radius: 5px;
+        margin-top: 20px;
+        text-align: center;
+    }
+</style>
+
+
+
+<div class="container mt-4">
+    <!-- Nút Tìm Kiếm -->
+
+        <div class="row mb-4">
+            <div class="col-md-12 d-flex justify-content-start">
+                <button class="btn btn-outline-primary" id="searchButton">
+                <i class="bi bi-filter"></i> Lọc
+                </button>
+            </div>
+        </div>
+
+        <!-- Khu vực Lọc (Dropdown) -->
+        <div id="filterDropdown" class="d-none position-absolute mt-2 p-3 bg-light border rounded shadow" style="z-index: 100;">
+            <!-- Form lọc -->
+            <div class="d-flex flex-column">
+                <input type="text" id="taskSearch" class="form-control mb-3" placeholder="Tìm theo tên nhiệm vụ..." oninput="filterTasks()">
+
+                <div class="d-flex justify-content-between mb-3">
+                    <input type="date" id="startDate" class="form-control w-48" oninput="filterTasks()">
+                    <input type="date" id="endDate" class="form-control w-48" oninput="filterTasks()">
+                </div>
+
+                <select id="statusFilter" class="form-control mb-3" onchange="filterTasks()">
+                    <option value="">Trạng thái</option>
+                    <option value="Đã nhận">Đã nhận</option>
+                    <option value="Đang chờ">Đang chờ</option>
+                </select>
+            <!-- Lọc theo người thực hiện -->
+            <select id="assignedUser" class="form-control mb-3" onchange="filterTasks()">
+                <option value="">Chọn người thực hiện</option>
+                @foreach (var task in Model)
+                {
+                    <option value="@task.AssignedUserName">@task.AssignedUserName</option>
+                }
+            </select>
+
+           
+
+                <select id="priorityFilter" class="form-control mb-3" onchange="filterTasks()">
+                    <option value="">Mức độ ưu tiên</option>
+                    <option value="Cao">Cao</option>
+                    <option value="Trung bình">Trung bình</option>
+                    <option value="Thấp">Thấp</option>
+                </select>
+
+                <button type="button" class="btn btn-primary w-100" onclick="applyFilters()">Áp dụng lọc</button>
+            </div>
+        </div>
+  
+        <div class="row" id="taskCardsContainer">
+        <!-- Card Container -->
+        @foreach (var task in Model)
+        {
+            <div class="col-md-4 mb-4 task-card" data-task-id="@task.TaskId" data-status="@task.Status" data-assigned-user="@task.AssignedUserName" data-priority="@task.Priority" data-start-date="@task.StartDate" data-end-date="@task.EndDate">
+                <div class="card shadow-sm rounded">
+                    <!-- Card Header with Task Name -->
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="card-title">@task.TaskName</h5>
+                        @if (Context.Session.GetString("leader").Equals("IsLeader"))
+                        {
+                            @if (task.Status.Equals("Đang thực hiện") || task.Status.Equals("Hoàn thành"))
+                            {
+                                <form method="post" asp-action="DeleteTask" asp-controller="Groups" id="deleteForm-@task.TaskId">
+                                    <input type="hidden" name="taskId" value="@task.TaskId" />
+                                    <button type="button" class="btn btn-link position-absolute top-0 end-0" onclick="confirmDeleteTask(@task.TaskId)" disabled>
+                                        <i class="bi bi-trash text-white"></i>
+                                    </button>
+                                </form>
+                            }
+                            else
+                            {
+                                <form method="post" asp-action="DeleteTask" asp-controller="Groups" id="deleteForm-@task.TaskId">
+                                    <input type="hidden" name="taskId" value="@task.TaskId" />
+                                    <button type="button" class="btn btn-link position-absolute top-0 end-0" onclick="confirmDeleteTask(@task.TaskId)" >
+                                        <i class="bi bi-trash text-white"></i>
+                                    </button>
+                                </form>
+                            }
+                        
+                        }
+                    </div>
+
+                    <!-- Card Body -->
+                    <div class="card-body">
+                        <p><strong>Bắt đầu:</strong> <span class="badge bg-primary">@task.StartDate</span></p>
+                        <p><strong>Kết thúc:</strong> <span class="badge bg-danger">@task.EndDate</span></p>
+                        <p><strong>Trạng thái:</strong> <span class="badge bg-success">@task.Status</span></p>
+                        <p><strong>Người thực hiện:</strong> <span class="badge bg-success assigned-user-name">@task.AssignedUserName</span></p>
+                        <p><strong>Ưu tiên:</strong> @task.Priority</p>
+                    </div>
+
+                    <!-- Card Footer with Accept Button -->
+                    <div class="card-footer text-center">
+                        @if (task.Status.Equals("Đang thực hiện") || task.Status.Equals("Hoàn thành"))
+                        {
+                            <!-- Nút Nhận Nhiệm Vụ - Disabled -->
+                            <button class="btn btn-success w-100 my-2" disabled>Nhận nhiệm vụ</button>
+
+                            @if (Context.Session.GetString("leader").Equals("IsLeader"))
+                            {
+                                <!-- Nút Chỉnh sửa nếu là trưởng nhóm -->
+                                <button class="btn btn-info w-48" data-bs-toggle="modal" data-bs-target="#updateTaskModal-@task.TaskId">Chỉnh sửa</button>
+                            }
+                        }
+                        else
+                        {
+                            <!-- Nút Nhận Nhiệm Vụ - Active -->
+                            <button class="btn btn-success w-100 my-2" data-bs-toggle="modal" data-bs-target="#acceptTaskModal-@task.TaskId">Nhận nhiệm vụ</button>
+
+                            @if (Context.Session.GetString("leader").Equals("IsLeader"))
+                            {
+                                <!-- Nút Chỉnh sửa nếu là trưởng nhóm -->
+                                <button class="btn btn-info w-48" data-bs-toggle="modal" data-bs-target="#updateTaskModal-@task.TaskId">Chỉnh sửa</button>
+                            }
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <!-- Modal for Accept Task -->
+            <div class="modal fade" id="acceptTaskModal-@task.TaskId" tabindex="-1" aria-labelledby="acceptTaskModalLabel" aria-hidden="true">
+                <div class="modal-dialog modal-lg">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="acceptTaskModalLabel">Chi tiết nhiệm vụ - @task.TaskName</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <p><strong>Mô tả:</strong> @task.Description</p>
+                            <p><strong>Bắt đầu:</strong> <span class="badge bg-primary">@task.StartDate</span></p>
+                            <p><strong>Kết thúc:</strong> <span class="badge bg-danger">@task.EndDate</span></p>
+                            <p><strong>Trạng thái:</strong> <span class="badge bg-success">@task.Status</span></p>
+                            <p><strong>Ưu tiên:</strong> @task.Priority</p>
+                            <p>
+                                <strong>Nộp bằng:</strong>
+                                @if (task.SubmissionTypes != null && task.SubmissionTypes.Any())
+                                {
+                                    <ul>
+                                        @foreach (var submissionType in task.SubmissionTypes)
+                                        {
+                                            <li>@submissionType</li>
+                                        }
+                                    </ul>
+                                }
+                                else
+                                {
+                                    <span>Chưa có phương thức nộp nào.</span>
+                                }
+                            </p>
+
+                            @if (!string.IsNullOrEmpty(task.AttachmentPath))
+                            {
+                                <p><strong>Tệp đính kèm:</strong> <a href="@Url.Content("~/" + task.AttachmentPath)" target="_blank">Tải xuống tệp đính kèm</a></p>
+                            }
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Đóng</button>
+                            <form method="post" id="taskForm-@task.TaskId">
+                                <input type="hidden" value="@task.TaskId" name="taskId" />
+                                <input type="hidden" value="@task.ProjectId" name="projectId" />
+                                <button type="submit" class="btn btn-success">Xác nhận nhận nhiệm vụ</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Modal for Editing Task (if Leader) -->
+            @if (Context.Session.GetString("leader").Equals("IsLeader"))
+            {
+                <div class="modal fade" id="updateTaskModal-@task.TaskId" tabindex="-1" aria-labelledby="updateTaskModalLabel-@task.TaskId" aria-hidden="true">
+                    <div class="modal-dialog">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title" id="updateTaskModalLabel-@task.TaskId">Chỉnh sửa công việc phụ</h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                            </div>
+                            <div class="modal-body">
+                                <!-- Form for Editing Task -->
+                                <form method="post" asp-action="UpdateTask" asp-controller="Work">
+                                    <input type="hidden" name="TaskId" value="@task.TaskId" />
+                                    <div class="mb-3">
+                                        <label for="status" class="form-label"><strong>Tên nhiệm vụ:</strong></label>
+                                        <input type="text" class="form-control" id="status" name="Status" value="@task.TaskName" />
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="status" class="form-label"><strong>Mô tả chi tiết:</strong></label>
+                                        <input type="text" class="form-control" id="status" name="Status" value="@task.Description" />
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="status" class="form-label"><strong>Bắt đầu:</strong></label>
+                                        <input type="datetime" class="form-control" id="status" name="Status" value="@task.StartDate" />
+                                    </div>
+                                     <div class="mb-3">
+                                        <label for="status" class="form-label"><strong>Kết thúc:</strong></label>
+                                        <input type="datetime" class="form-control" id="status" name="Status" value="@task.EndDate" />
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="status" class="form-label"><strong>Trạng thái:</strong></label>
+                                        <input type="text" class="form-control" id="status" name="Status" value="@task.Status" />
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="assignedUser" class="form-label"><strong>Người thực hiện:</strong></label>
+                                        <input type="text" class="form-control" id="assignedUser" name="AssignedUserName" value="@task.AssignedUserName" />
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="priority" class="form-label">Mức độ ưu tiên</label>
+                                        <select class="form-select" id="priority" name="Priority" required>
+                                            <option value="Cao">Cao</option>
+                                            <option value="Trung bình">Trung bình</option>
+                                            <option value="Thấp">Thấp</option>
+                                        </select>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="attachments" class="form-label">Tài liệu đính kèm</label>
+                                        <input type="file" class="form-control" id="attachments" name="Attachments" multiple>
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <label for="notes" class="form-label">Ghi chú thêm</label>
+                                        <textarea class="form-control" id="notes" name="Notes" rows="2"></textarea>
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <label class="form-label">Nộp bằng:</label>
+                                        <div class="d-flex flex-wrap">
+                                            <div class="form-check me-3 mb-2">
+                                                <input class="form-check-input" type="checkbox" id="fileWord" name="SubmissionTypes[]" value="File Word">
+                                                <label class="form-check-label" for="fileWord">File Word</label>
+                                            </div>
+                                            <div class="form-check me-3 mb-2">
+                                                <input class="form-check-input" type="checkbox" id="fileCode" name="SubmissionTypes[]" value="File Code">
+                                                <label class="form-check-label" for="fileCode">File Code</label>
+                                            </div>
+                                            <div class="form-check me-3 mb-2">
+                                                <input class="form-check-input" type="checkbox" id="fileDatabase" name="SubmissionTypes[]" value="File Database">
+                                                <label class="form-check-label" for="fileDatabase">File Database</label>
+                                            </div>
+                                            <div class="form-check me-3 mb-2">
+                                                <input class="form-check-input" type="checkbox" id="filePDF" name="SubmissionTypes[]" value="File PDF">
+                                                <label class="form-check-label" for="filePDF">File PDF</label>
+                                            </div>
+                                            <div class="form-check me-3 mb-2">
+                                                <input class="form-check-input" type="checkbox" id="fileImage" name="SubmissionTypes[]" value="File Image">
+                                                <label class="form-check-label" for="fileImage">File Image</label>
+                                            </div>
+                                            <div class="form-check me-3 mb-2">
+                                                <input class="form-check-input" type="checkbox" id="fileExcel" name="SubmissionTypes[]" value="File Excel">
+                                                <label class="form-check-label" for="fileExcel">File Excel</label>
+                                            </div>
+                                            <div class="form-check me-3 mb-2">
+                                                <input class="form-check-input" type="checkbox" id="fileDiagram" name="SubmissionTypes[]" value="File Diagram">
+                                                <label class="form-check-label" for="fileDiagram">File Diagram</label>
+                                            </div>
+                                            <div class="form-check me-3 mb-2">
+                                                <input class="form-check-input" type="checkbox" id="fileText" name="SubmissionTypes[]" value="File Text">
+                                                <label class="form-check-label" for="fileText">File Text</label>
+                                            </div>
+
+                                            <!-- Thêm các loại file khác bên dưới -->
+                                            <div class="form-check me-3 mb-2">
+                                                <input class="form-check-input" type="checkbox" id="filePowerPoint" name="SubmissionTypes[]" value="File PowerPoint">
+                                                <label class="form-check-label" for="filePowerPoint">File PowerPoint</label>
+                                            </div>
+                                            <div class="form-check me-3 mb-2">
+                                                <input class="form-check-input" type="checkbox" id="fileCompressed" name="SubmissionTypes[]" value="File Compressed">
+                                                <label class="form-check-label" for="fileCompressed">File Nén (ZIP/RAR)</label>
+                                            </div>
+                                        </div>
+                                       </div>
+                                    <div class="modal-footer">
+                                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Hủy</button>
+                                        <button type="submit" class="btn btn-primary" disabled>Lưu thay đổi</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        }
+    </div>
+
+</div>
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+@*     <script>
+    // Lấy các phần tử liên quan đến tìm kiếm và lọc
+    const searchButton = document.getElementById('searchButton');
+    const filterDropdown = document.getElementById('filterDropdown');
+
+    // Hiển thị hoặc ẩn dropdown khi nhấn nút tìm kiếm
+    searchButton.addEventListener('click', function () {
+        filterDropdown.classList.toggle('d-none'); // Toggle visibility của dropdown
+    });
+
+    // Ẩn dropdown khi người dùng nhấn vào bất kỳ đâu ngoài khu vực tìm kiếm
+    document.addEventListener('click', function (event) {
+        if (!filterDropdown.contains(event.target) && event.target !== searchButton) {
+            filterDropdown.classList.add('d-none');
+        }
+    });
+
+    // Áp dụng bộ lọc và ẩn dropdown
+    function applyFilters() {
+        filterTasks();
+        filterDropdown.classList.add('d-none'); // Ẩn dropdown sau khi lọc
+    }
+
+    // Hàm lọc nhiệm vụ
+    function filterTasks() {
+        const taskSearch = document.getElementById('taskSearch').value.toLowerCase();
+        const startDate = document.getElementById('startDate').value;
+        const endDate = document.getElementById('endDate').value;
+        const status = document.getElementById('statusFilter').value;
+        const assignedUser = document.getElementById('assignedUser').value.toLowerCase();
+        const priority = document.getElementById('priorityFilter').value;
+
+        const taskCards = document.querySelectorAll('.task-card');
+        let foundResults = false;
+
+        taskCards.forEach(card => {
+            const taskName = card.querySelector('.card-title').textContent.toLowerCase();
+            const taskStartDate = card.getAttribute('data-start-date');
+            const taskEndDate = card.getAttribute('data-end-date');
+            const taskStatus = card.getAttribute('data-status');
+            const taskAssignedUser = card.getAttribute('data-assigned-user').toLowerCase();
+            const taskPriority = card.getAttribute('data-priority');
+
+            const isMatchingSearch = taskName.includes(taskSearch);
+            const isMatchingStartDate = startDate ? taskStartDate >= startDate : true;
+            const isMatchingEndDate = endDate ? taskEndDate <= endDate : true;
+            const isMatchingStatus = status ? taskStatus === status : true;
+            const isMatchingAssignedUser = assignedUser ? taskAssignedUser.includes(assignedUser) : true;
+            const isMatchingPriority = priority ? taskPriority === priority : true;
+
+            if (isMatchingSearch && isMatchingStartDate && isMatchingEndDate && isMatchingStatus && isMatchingAssignedUser && isMatchingPriority) {
+                card.style.display = 'block';
+                foundResults = true; // Có kết quả
+            } else {
+                card.style.display = 'none';
+            }
+        });
+
+        // Kiểm tra nếu không có kết quả
+        if (!foundResults) {
+            const noResultsMessage = document.getElementById('noResultsMessage');
+            if (!noResultsMessage) {
+
+                    noResultsMessage = document.createElement('div');
+                    noResultsMessage.id = 'noResultsMessage';
+                    noResultsMessage.textContent = 'Không có kết quả';
+                    noResultsMessage.classList.add('alert', 'alert-info', 'text-center');
+                    taskCardsContainer.appendChild(noResultsMessage);
+                
+            }
+        } else {
+            // Nếu có kết quả, ẩn thông báo "Không có kết quả"
+            const noResultsMessage = document.getElementById('noResultsMessage');
+            if (noResultsMessage) {
+                noResultsMessage.remove();
+            }
+        }
+
+        // Nếu tất cả các trường tìm kiếm đều trống, hiển thị lại tất cả nhiệm vụ
+        if (!taskSearch && !startDate && !endDate && !status && !assignedUser && !priority) {
+            taskCards.forEach(card => {
+                card.style.display = 'block'; // Hiển thị tất cả nhiệm vụ khi không có lọc
+            });
+
+            // Ẩn thông báo "Không có kết quả"
+            const noResultsMessage = document.getElementById('noResultsMessage');
+            if (noResultsMessage) {
+                noResultsMessage.remove();
+            }
+        }
+    }
+
+</script> *@
+
+
+
+
+    <script>
+    // Hiển thị cảnh báo xóa bằng SweetAlert
+function confirmDeleteTask(taskId) {
+    Swal.fire({
+        title: 'Bạn có chắc chắn?',
+        text: "Hành động này không thể hoàn tác!",
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#d33',
+        cancelButtonColor: '#3085d6',
+        confirmButtonText: 'Xóa',
+        cancelButtonText: 'Hủy'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            $.ajax({
+                type: 'POST',
+                url: '/Groups/DeleteTask', // URL đến Action xóa nhiệm vụ
+                data: { taskId: taskId },
+                success: function (response) {
+                    if (response.success) {
+                        // Cập nhật lại danh sách nhiệm vụ
+                        $(`div[data-task-id='${taskId}']`).remove();
+                        Swal.fire('Đã xóa nhiệm vụ', '', 'success');
+                    } else {
+                        Swal.fire('Nhiệm  vụ đã có người nhận', 'Không thể xóa nhiệm vụ', 'error');
+                    }
+                },
+                error: function () {
+                    Swal.fire('Có lỗi xảy ra', '', 'error');
+                }
+            });
+        }
+    });
+}
+
+
+
+   $(document).ready(function () {
+    // Xử lý nhận nhiệm vụ khi submit form
+    $('form[id^="taskForm-"]').submit(function (e) {
+        e.preventDefault(); // Ngăn chặn gửi form mặc định
+
+        var form = $(this);
+        var taskId = form.find('input[name="taskId"]').val(); // Lấy taskId
+        var projectId = form.find('input[name="projectId"]').val(); // Lấy projectId
+
+        $.ajax({
+            type: 'POST',
+            url: '/Groups/RecivedTask', // URL đến Action nhận nhiệm vụ
+            data: form.serialize(),
+            success: function (response) {
+                if (response.success) {
+                    // Hiển thị Toast thông báo thành công
+                    $('#toastMessage').text(response.message);
+                    var toastEl = document.querySelector('.toast');
+                    var toast = new bootstrap.Toast(toastEl);
+                    toast.show();
+
+                    // Cập nhật lại danh sách nhiệm vụ
+                    $('#taskList').html(response.tasksHtml);
+
+                    // Đóng modal nếu đang mở
+                    var modals = document.querySelectorAll('.modal.show');
+                    modals.forEach(modalEl => {
+                        var modal = bootstrap.Modal.getInstance(modalEl);
+                        modal.hide();
+                    });
+                        var taskCard = $(`div[data-task-id="${response.taskId}"]`);
+                        taskCard.find('.assigned-user-name').text(response.userName);
+                    // Vô hiệu hóa nút nhận nhiệm vụ và thay đổi văn bản
+                    var taskButton = $(`button[data-bs-target="#acceptTaskModal-${taskId}"]`);
+                  
+                    taskButton.prop('disabled', true);
+                    taskButton.text('Đã nhận nhiệm vụ');
+                } else {
+                    alert('Lỗi khi nhận nhiệm vụ: ' + response.message);
+                }
+            },
+            error: function (error) {
+                console.error('Lỗi khi gửi dữ liệu:', error);
+                alert('Có lỗi xảy ra. Vui lòng thử lại.');
+            }
+        });
+    });
+});
+
+    </script>
+
+
+
+
